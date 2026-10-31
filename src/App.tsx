@@ -1435,7 +1435,7 @@ function App() {
                   <table className="w-full text-[9px] border-separate border-spacing-0 min-w-[max-content]">
                     <thead className="relative z-30">
                       <tr className="bg-accent-l text-accent">
-                        <th data-sticky-col className="p-1 border border-border font-bold sticky left-0 top-0 bg-accent-l z-50 min-w-[48px] text-[8px] text-left leading-tight">
+                        <th data-sticky-col className="p-1 border border-border font-bold sticky left-0 top-0 bg-accent-l z-50 min-w-[76px] text-[8px] text-left leading-tight">
                           人 / 累計
                         </th>
                         {Array.from({ length: daysInMonth }).map((_, i) => {
@@ -1462,7 +1462,7 @@ function App() {
                     <tbody>
                       {/* Row for Global Location (場所) */}
                       <tr className="bg-orange-50/30">
-                        <td className="p-1 border border-border sticky left-0 bg-orange-50 z-20 font-bold text-orange-800 text-[8px]">
+                        <td className="p-1 border border-border sticky left-0 bg-orange-50 z-20 font-bold text-orange-800 text-[8px] min-w-[76px]">
                           場所 (固定表示)
                         </td>
                         {Array.from({ length: daysInMonth }).map((_, i) => (
@@ -1481,7 +1481,7 @@ function App() {
 
                       {/* Row for Global Time (時間) */}
                       <tr className="bg-blue-50/30">
-                        <td className="p-1 border border-border sticky left-0 bg-blue-50 z-20 font-bold text-blue-800 text-[8px]">
+                        <td className="p-1 border border-border sticky left-0 bg-blue-50 z-20 font-bold text-blue-800 text-[8px] min-w-[76px]">
                           時間 (固定表示)
                         </td>
                         {Array.from({ length: daysInMonth }).map((_, i) => (
@@ -1500,7 +1500,7 @@ function App() {
 
                       {/* Row for workingCount (稼働数) */}
                       <tr className="bg-bg/50">
-                        <td className="p-1 border border-border sticky left-0 bg-bg z-20 font-bold text-text text-[8px]">
+                        <td className="p-1 border border-border sticky left-0 bg-bg z-20 font-bold text-text text-[8px] min-w-[76px]">
                           稼働人数 (合計)
                         </td>
                         {Array.from({ length: daysInMonth }).map((_, i) => {
@@ -1526,11 +1526,11 @@ function App() {
                         const requestCount = schedule.filter(s => s.type === 'request').length;
                         return (
                           <tr key={name} className="hover:bg-bg/40 transition-colors">
-                            <td className="p-0.5 border border-border sticky left-0 bg-white z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+                            <td className="p-1 border border-border sticky left-0 bg-white z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] min-w-[76px]">
                               <div className="flex flex-col gap-0.5">
-                                <div className="flex items-center justify-between gap-0.25">
-                                  <div className="font-bold text-accent text-[7.5px] truncate max-w-[32px]">{name.replace('　', '')}</div>
-                                  <div className="flex flex-col text-[6px] font-bold leading-tight shrink-0">
+                                <div className="flex items-center justify-between gap-1">
+                                  <div className="font-bold text-accent text-[8px] whitespace-nowrap" title={name}>{name.replace('　', '')}</div>
+                                  <div className="flex flex-col text-[6px] font-bold leading-tight shrink-0 text-right">
                                     <span className="text-gray-400">公{normalCount}</span>
                                     <span className="text-pink-400">希{requestCount}</span>
                                   </div>
