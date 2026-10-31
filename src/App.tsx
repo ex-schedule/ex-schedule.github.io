@@ -1050,7 +1050,7 @@ function App() {
               <Calendar size={24} />
             </div>
             <div>
-              <h1 className="sr-only min-[340px]:not-sr-only text-base sm:text-lg font-bold tracking-tight whitespace-nowrap">共有スケジュール</h1>
+              <h1 className="sr-only min-[340px]:not-sr-only text-base sm:text-lg font-bold tracking-tight whitespace-nowrap">EX事業部スケジュール</h1>
               <p className="hidden sm:block text-[10px] text-text2 font-medium uppercase tracking-widest">Schedule Management</p>
             </div>
           </div>
