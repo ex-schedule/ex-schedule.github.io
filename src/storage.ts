@@ -89,6 +89,10 @@ export type DocumentClient = {
 };
 
 const ACTIVE_HASH_STORAGE_KEY = 'ex_schedule_active_share_hash_v1';
+const DEFAULT_SHARED_EDIT_HASH =
+  '#ch=6bfb4e7051e0512db416ed77272a214f&k=H1v6HzcScIhTBLBG_5_KFxGdplm4JWZt3Nty2igD2yk&s=PtBhgQTxv1rxsN-7axzELS78bDtz79--kxnRH9POy-4';
+const DEFAULT_SHARED_VIEW_HASH =
+  '#ch=6bfb4e7051e0512db416ed77272a214f&k=H1v6HzcScIhTBLBG_5_KFxGdplm4JWZt3Nty2igD2yk&v=s9xob80sBjLmqVdWGDyV4uT-0itxIzOkZke9jr5lYpI';
 let activeCredentials: ChannelCredentials | null = null;
 
 export function getActiveShareLinks(baseUrl?: string): { editUrl: string; viewUrl: string } | null {
@@ -468,8 +472,9 @@ export async function initializeSession() {
   const url = new URL(window.location.href);
   const hashParams = new URLSearchParams(url.hash.slice(1));
 
-  // 1. Check if CryptPad E2EE share hash is in URL or saved in localStorage
-  let creds = await parseShareHash(url.hash);
+  // 1. Check if CryptPad E2EE share hash is in URL (hash or query) or saved in localStorage
+  let creds =
+    (await parseShareHash(url.hash)) || (await parseShareHash(url.search.slice(1)));
   if (!creds && !hashParams.get('key')) {
     try {
       const savedHash = localStorage.getItem(ACTIVE_HASH_STORAGE_KEY);
@@ -491,7 +496,7 @@ export async function initializeSession() {
     return;
   }
 
-  // 3. Otherwise try local HTTP backend first (if running locally via `npm start`), fallback to auto-creating a new serverless CryptPad channel
+  // 3. Otherwise try local HTTP backend first (if running locally via `npm start`), fallback to the single shared team CryptPad channel
   const legacyKey = hashParams.get('key');
   try {
     activeCryptPadClient = null;
@@ -510,14 +515,16 @@ export async function initializeSession() {
     return;
   } catch {
     // No local Node server is present -> Serverless static mode!
-    // Generate a new ownerless CryptPad E2EE channel so the app works immediately without any server
-    const newCreds = await generateNewChannelCredentials();
-    activeCredentials = newCreds;
-    const newHash = formatShareHash(newCreds, 'edit');
+    // Connect to the single shared team CryptPad E2EE channel so everyone (including PWA home-screen launches) shares 1 storage destination
+    const wantReadOnly = url.searchParams.get('readonly') === '1';
+    const defaultHash = wantReadOnly ? DEFAULT_SHARED_VIEW_HASH : DEFAULT_SHARED_EDIT_HASH;
+    const fallbackCreds = (await parseShareHash(defaultHash)) || (await generateNewChannelCredentials());
+    activeCredentials = fallbackCreds;
+    const canonicalHash = formatShareHash(fallbackCreds, fallbackCreds.readOnly ? 'view' : 'edit');
     try {
-      localStorage.setItem(ACTIVE_HASH_STORAGE_KEY, newHash);
+      localStorage.setItem(ACTIVE_HASH_STORAGE_KEY, canonicalHash);
     } catch {}
-    activeCryptPadClient = await createCryptPadDocumentClient(newCreds);
-    window.history.replaceState(null, '', url.pathname + url.search + newHash);
+    activeCryptPadClient = await createCryptPadDocumentClient(fallbackCreds);
+    window.history.replaceState(null, '', url.pathname + url.search + canonicalHash);
   }
 }
