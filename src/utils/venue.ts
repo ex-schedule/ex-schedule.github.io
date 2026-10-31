@@ -390,10 +390,12 @@ export const buildProjectCandidates = (
     time: string;
   }
   const entries: RawEntry[] = [];
+  const today = todayString();
 
   for (let dayIdx = 0; dayIdx < daysInMonth; dayIdx++) {
     const dayNum = dayIdx + 1;
     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+    if (dateStr < today) continue;
     const dayTime = dailyTimes[dayNum] || '';
 
     membersList.forEach(m => {
@@ -445,7 +447,6 @@ export const buildProjectCandidates = (
     }
   });
 
-  const today = todayString();
   return byVenueGroup
     .map((g, idx) => {
       const sortedDates = [...g.dates].sort();

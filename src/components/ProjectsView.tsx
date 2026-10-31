@@ -1,7 +1,7 @@
 import { useState, useRef, useMemo } from 'react';
 import { LEAD_MEMBERS, NON_EVENT_KEYWORDS } from '../constants';
 import type { ProjectItem, ProjectCandidate } from '../types';
-import { genId, todayString, isNonEventVenue, isSameVenue, sameProjectName, detectProjectMetadata, projectCoversDate } from '../utils/venue';
+import { genId, todayString, isNonEventVenue, isSameVenue, sameProjectName, detectProjectMetadata, projectCoversDate, projectDates } from '../utils/venue';
 import { ProjectsListView } from './ProjectsListView';
 import { ProjectDetailView } from './ProjectDetailView';
 import { mergeSameNameProjects } from '../utils/projectChanges';
@@ -50,14 +50,39 @@ export const ProjectsView = ({
     }
   };
 
+  const today = todayString();
+  const isCurrentProject = (p: ProjectItem) => {
+    const lastDate = [p.date, p.dateEnd, ...(p.occurrenceDates || [])].filter(Boolean).sort().at(-1);
+    return !lastDate || lastDate >= today;
+  };
+
   const { displayProjects, sourceIdsById, mergeErrors } = useMemo(() => {
+    const trimPastDates = (p: ProjectItem): ProjectItem | null => {
+      const allDates = projectDates(p);
+      if (allDates.length === 0) return p;
+      const futureDates = allDates.filter(d => d >= today);
+      if (futureDates.length === 0) return null;
+      if (futureDates.length === allDates.length) return p;
+      return {
+        ...p,
+        date: futureDates[0],
+        dateEnd: futureDates[futureDates.length - 1],
+        ...(p.occurrenceDates?.length ? { occurrenceDates: futureDates } : {}),
+      };
+    };
+
+    const currentOnly = projects
+      .filter(p => !isNonEventVenue(p.venue) && isCurrentProject(p))
+      .map(trimPastDates)
+      .filter((p): p is ProjectItem => p !== null);
+
     const displayProjects: ProjectItem[] = [];
     const sourceIdsById = new Map<string, string[]>();
     const mergeErrors: string[] = [];
     const visited = new Set<string>();
-    for (const project of projects) {
+    for (const project of currentOnly) {
       if (visited.has(project.id)) continue;
-      const matches = projects.filter(p => sameProjectName(p.venue, project.venue));
+      const matches = currentOnly.filter(p => sameProjectName(p.venue, project.venue));
       matches.forEach(p => visited.add(p.id));
       if (matches.length < 2) {
         displayProjects.push(project);
@@ -75,14 +100,9 @@ export const ProjectsView = ({
       }
     }
     return { displayProjects, sourceIdsById, mergeErrors };
-  }, [projects]);
+  }, [projects, today]);
 
-  const today = todayString();
-  const isCurrentProject = (p: ProjectItem) => {
-    const lastDate = [p.date, p.dateEnd, ...(p.occurrenceDates || [])].filter(Boolean).sort().at(-1);
-    return !lastDate || lastDate >= today;
-  };
-  const visibleProjects = displayProjects.filter(p => !isNonEventVenue(p.venue) && isCurrentProject(p));
+  const visibleProjects = displayProjects;
 
   const selectedSnapshot = useRef<ProjectItem | null>(null);
   const liveSelected = visibleProjects.find(p => p.id === selectedId || sourceIdsById.get(p.id)?.includes(selectedId || ''));
