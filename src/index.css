@@ -1,0 +1,157 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Noto Sans JP", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Meiryo", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", "Cascadia Mono", "Consolas", ui-monospace, SFMono-Regular, monospace;
+
+  --color-accent: #2563eb;
+  --color-accent-l: #dbeafe;
+  --color-accent-m: #93c5fd;
+  --color-bg: #f4f7fc;
+  --color-surface: #ffffff;
+  --color-border: #e2e8f4;
+  --color-border2: #c8d4ea;
+  --color-text: #1e2a3a;
+  --color-text2: #4a5568;
+  --color-text3: #a0aec0;
+}
+
+/* スマホでのフォント自動拡大（font boosting）を止める。ピンチズームは可能なまま */
+html {
+  -webkit-text-size-adjust: 100%;
+  -moz-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border2);
+  border-radius: 4px;
+}
+
+/* 閲覧専用モード（?readonly=1） */
+.readonly-mode input:not([data-view-control]),
+.readonly-mode textarea,
+.readonly-mode select:not([data-view-control]):not([data-status-select]) {
+  pointer-events: none;
+  background-color: #f8fafc;
+  color: var(--color-text2);
+}
+.readonly-mode [data-edit-only] {
+  display: none !important;
+}
+
+/* 印刷 / PDF出力 */
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 8mm;
+  }
+
+  body {
+    background: #fff;
+  }
+
+  header,
+  nav,
+  footer,
+  [data-no-print] {
+    display: none !important;
+  }
+
+  main {
+    padding: 0 !important;
+    max-width: none !important;
+  }
+
+  .shadow-sm,
+  .shadow-xl {
+    box-shadow: none !important;
+  }
+
+  table {
+    page-break-inside: auto;
+  }
+
+  tr {
+    page-break-inside: avoid;
+  }
+
+  select,
+  input,
+  textarea {
+    border: none !important;
+    background: transparent !important;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+}
+
+/* 横に長い表のスクロールバーを掴みやすくする */
+.scroll-x-strong {
+  scrollbar-width: auto;
+  scrollbar-color: var(--color-border2) transparent;
+  overscroll-behavior-x: contain;
+  scroll-padding-left: 60px;
+}
+.scroll-x-strong::-webkit-scrollbar {
+  height: 14px;
+}
+.scroll-x-strong::-webkit-scrollbar-track {
+  background: var(--color-bg);
+  border-radius: 8px;
+}
+.scroll-x-strong::-webkit-scrollbar-thumb {
+  background: var(--color-border2);
+  border: 3px solid var(--color-bg);
+  border-radius: 8px;
+}
+.scroll-x-strong::-webkit-scrollbar-thumb:hover {
+  background: var(--color-accent-m);
+}
+
+/* 横スクロール領域のスクロールバーを隠す（スマホのタブ列など） */
+.hide-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  overscroll-behavior-x: contain;
+}
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* スマホ画面切れ対策：案件一覧・案件詳細のルートをビューポート内に収める */
+.project-surface {
+  overflow-wrap: anywhere;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+}
+
+/* スペースの無い長い英数字（クライアント名・案件名など）も画面内で折返す */
+.project-text-wrap {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+
+@media screen and (max-width: 639px) {
+  .project-surface [data-no-print] button,
+  .project-surface input:not([type="checkbox"]):not([type="radio"]),
+  .project-surface select {
+    min-height: 44px;
+  }
+}

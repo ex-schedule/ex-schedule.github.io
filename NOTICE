@@ -1,0 +1,5 @@
+Schedule Share
+
+This distribution reuses application sources carrying SPDX-License-Identifier: Apache-2.0 notices. Existing source notices are retained.
+Modified for portable distribution: external cloud integration replaced with a self-contained HTTP/SQLite server; organization-specific sample data and name migration removed; team configuration and deployment documentation added.
+Bundled fonts retain their separate OFL license files in public/fonts/. npm dependencies retain their respective licenses.
