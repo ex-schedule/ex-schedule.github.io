@@ -273,20 +273,18 @@ export const MemberManagementModal = ({
                         {idx + 1}
                       </span>
                       <span className="font-bold text-sm text-text truncate">{name}</span>
-                      <button
-                        type="button"
-                        disabled={!canEdit || busy}
-                        onClick={() => handleToggleLead(name)}
-                        title="クリックでイベントリーダーを切り替え"
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold border transition-colors flex items-center gap-1 shrink-0 ${
-                          isLead
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100 shadow-2xs'
-                            : 'bg-bg text-text3 border-border hover:text-text2 hover:border-border2'
-                        }`}
-                      >
-                        <ShieldCheck size={11} />
-                        {isLead ? 'イベントリーダー' : '一般'}
-                      </button>
+                      {isLead && (
+                        <button
+                          type="button"
+                          disabled={!canEdit || busy}
+                          onClick={() => handleToggleLead(name)}
+                          title="クリックでイベントリーダーを解除"
+                          className="px-2 py-0.5 rounded-full text-[10px] font-bold border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 shadow-2xs transition-colors flex items-center gap-1 shrink-0"
+                        >
+                          <ShieldCheck size={11} />
+                          イベントリーダー
+                        </button>
+                      )}
                     </div>
 
                     {canEdit && (
