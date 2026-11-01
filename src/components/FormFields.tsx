@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useId } from 'react';
-import { Plus, Sparkles, Minus, Users, Check } from 'lucide-react';
+import { Plus, Sparkles, Minus, Users, Check, X } from 'lucide-react';
 
 
 // --- 案件共有 ---
@@ -227,31 +227,13 @@ export const RoleChipSelect = ({
   themeColor?: 'purple' | 'emerald' | 'sky' | 'accent';
   emptyText?: string;
 }) => {
-  const getStyle = (on: boolean) => {
-    if (themeColor === 'purple') {
-      return on
-        ? 'bg-purple-600 border-purple-600 text-white shadow-xs scale-102'
-        : 'bg-white border-purple-200 text-purple-900 hover:border-purple-500 hover:bg-purple-50/50';
-    }
-    if (themeColor === 'emerald') {
-      return on
-        ? 'bg-emerald-600 border-emerald-600 text-white shadow-xs scale-102'
-        : 'bg-white border-emerald-200 text-emerald-900 hover:border-emerald-500 hover:bg-emerald-50/50';
-    }
-    if (themeColor === 'sky') {
-      return on
-        ? 'bg-sky-600 border-sky-600 text-white shadow-xs scale-102'
-        : 'bg-white border-sky-200 text-sky-900 hover:border-sky-500 hover:bg-sky-50/50';
-    }
-    return on
-      ? 'bg-accent border-accent text-white shadow-xs scale-102'
-      : 'bg-white border-border2 text-text2 hover:border-accent hover:text-accent';
-  };
+  const [isOpen, setIsOpen] = useState(false);
+  const unselectedOptions = options.filter(name => !selected.includes(name));
 
   const getContainerStyle = () => {
-    if (themeColor === 'purple') return 'border-purple-200 bg-purple-50/30';
-    if (themeColor === 'emerald') return 'border-emerald-200 bg-emerald-50/30';
-    if (themeColor === 'sky') return 'border-sky-200 bg-sky-50/30';
+    if (themeColor === 'purple') return 'border-purple-200 bg-purple-50/20';
+    if (themeColor === 'emerald') return 'border-emerald-200 bg-emerald-50/20';
+    if (themeColor === 'sky') return 'border-sky-200 bg-sky-50/20';
     return 'border-border bg-bg/20';
   };
 
@@ -262,8 +244,22 @@ export const RoleChipSelect = ({
     return 'bg-accent-l text-accent border-accent/20';
   };
 
+  const getTagStyle = () => {
+    if (themeColor === 'purple') return 'bg-purple-600 text-white shadow-xs';
+    if (themeColor === 'emerald') return 'bg-emerald-600 text-white shadow-xs';
+    if (themeColor === 'sky') return 'bg-sky-600 text-white shadow-xs';
+    return 'bg-accent text-white shadow-xs';
+  };
+
+  const getAddBtnStyle = () => {
+    if (themeColor === 'purple') return 'text-purple-700 bg-white border-purple-200 hover:border-purple-500 hover:bg-purple-50';
+    if (themeColor === 'emerald') return 'text-emerald-700 bg-white border-emerald-200 hover:border-emerald-500 hover:bg-emerald-50';
+    if (themeColor === 'sky') return 'text-sky-700 bg-white border-sky-200 hover:border-sky-500 hover:bg-sky-50';
+    return 'text-accent bg-white border-accent/25 hover:border-accent hover:bg-accent-l';
+  };
+
   return (
-    <div className={`flex flex-col gap-2 p-3.5 rounded-xl border ${getContainerStyle()}`}>
+    <div className={`flex flex-col gap-2.5 p-3.5 rounded-xl border ${getContainerStyle()} transition-all`}>
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-1.5">
           <span className={`px-2 py-0.5 rounded-md text-[10px] font-black border ${getBadgeStyle()}`}>
@@ -271,36 +267,74 @@ export const RoleChipSelect = ({
           </span>
           <span className="text-sm font-bold text-text">{label}</span>
           {roleDescription && (
-            <span className="text-[9.5px] text-text3 font-normal hidden sm:inline">
+            <span className="text-[10px] text-text3 font-normal hidden sm:inline">
               ({roleDescription})
             </span>
           )}
         </div>
-        <span className="text-[10px] font-bold text-text2 bg-white/80 px-2 py-0.5 rounded-full border border-border2/60">
-          {selected.length > 0 ? `${selected.length}名 選択中` : '0名'}
-        </span>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[11px] font-bold text-text2 bg-white/80 px-2 py-0.5 rounded-full border border-border2/60">
+            {selected.length}名
+          </span>
+          <button
+            type="button"
+            onClick={() => setIsOpen(v => !v)}
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg border text-xs font-bold transition-all active:scale-95 ${getAddBtnStyle()} ${isOpen ? 'ring-2 ring-accent/30' : ''}`}
+          >
+            <Plus size={12} className={isOpen ? 'rotate-45 transition-transform' : 'transition-transform'} />
+            {isOpen ? '閉じる' : '追加'}
+          </button>
+        </div>
       </div>
 
-      {options.length === 0 ? (
-        <span className="text-[10px] text-text3">{emptyText || '選択肢がありません'}</span>
-      ) : (
-        <div className="flex flex-wrap gap-1.5">
-          {options.map(name => {
-            const on = selected.includes(name);
-            return (
+      {/* アサイン済みメンバー一覧（スッキリとタグ表示） */}
+      <div className="flex flex-wrap items-center gap-1.5 min-h-[32px]">
+        {selected.length === 0 ? (
+          <span className="text-xs text-text3 py-1 font-medium italic">未割り当て</span>
+        ) : (
+          selected.map(name => (
+            <span
+              key={name}
+              className={`inline-flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-lg text-xs font-bold ${getTagStyle()}`}
+            >
+              <span>{name.replace('　', '')}</span>
               <button
-                key={name}
                 type="button"
                 onClick={() => onToggle(name)}
-                className={`px-2.5 py-1.5 min-h-[44px] sm:min-h-0 rounded-lg text-sm sm:text-xs font-bold border transition-all active:scale-95 flex items-center gap-1 ${getStyle(
-                  on
-                )}`}
+                title={`${name.replace('　', '')}の割り当てを解除`}
+                className="w-4 h-4 rounded hover:bg-black/20 flex items-center justify-center transition-colors text-white/90 hover:text-white"
               >
-                {on && <Check size={11} className="stroke-[3]" />}
-                {name.replace('　', '')}
+                <X size={11} className="stroke-[3]" />
               </button>
-            );
-          })}
+            </span>
+          ))
+        )}
+      </div>
+
+      {/* 追加パレット（開いた時だけ未選択メンバーを表示） */}
+      {isOpen && (
+        <div className="mt-1 p-2.5 rounded-lg bg-white border border-border2 shadow-xs space-y-2">
+          <div className="text-[10px] font-bold text-text3 flex items-center justify-between">
+            <span>タップして{label}に追加:</span>
+            <span>残り{unselectedOptions.length}名</span>
+          </div>
+          {unselectedOptions.length === 0 ? (
+            <div className="text-xs text-text3 py-1 text-center">全員が選択済みです</div>
+          ) : (
+            <div className="flex flex-wrap gap-1.5 max-h-48 overflow-y-auto">
+              {unselectedOptions.map(name => (
+                <button
+                  key={name}
+                  type="button"
+                  onClick={() => onToggle(name)}
+                  className="px-2 py-1 rounded-md text-xs font-bold bg-bg hover:bg-accent hover:text-white border border-border2 transition-all flex items-center gap-1 active:scale-95"
+                >
+                  <Plus size={10} />
+                  {name.replace('　', '')}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
