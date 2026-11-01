@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { Users, Plus, Trash2, Edit2, Check, X, ArrowUp, ArrowDown } from 'lucide-react';
+import { Users, Plus, Trash2, Edit2, Check, X, ArrowUp, ArrowDown, ShieldCheck } from 'lucide-react';
 
 export const MemberManagementModal = ({
   open,
@@ -176,6 +176,16 @@ export const MemberManagementModal = ({
                 className="flex-1 px-3 py-2 rounded-lg border border-border2 bg-white text-sm font-bold text-text outline-none focus:border-accent"
                 style={{ fontSize: '16px' }}
               />
+              <label className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg bg-white border border-border2 text-xs font-bold text-text2 cursor-pointer select-none shrink-0">
+                <input
+                  type="checkbox"
+                  checked={newIsLead}
+                  disabled={busy}
+                  onChange={e => setNewIsLead(e.target.checked)}
+                  className="accent-emerald-600"
+                />
+                イベントリーダー
+              </label>
               <button
                 type="submit"
                 disabled={busy || !newName.trim()}
@@ -226,6 +236,16 @@ export const MemberManagementModal = ({
                       style={{ fontSize: '16px' }}
                       autoFocus
                     />
+                    <label className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-bg border border-border2 text-xs font-bold text-text2 cursor-pointer select-none shrink-0">
+                      <input
+                        type="checkbox"
+                        checked={editingIsLead}
+                        disabled={busy}
+                        onChange={e => setEditingIsLead(e.target.checked)}
+                        className="accent-emerald-600"
+                      />
+                      イベントリーダー
+                    </label>
                     <div className="flex items-center gap-1.5 shrink-0">
                       <button
                         type="button"
@@ -253,6 +273,20 @@ export const MemberManagementModal = ({
                         {idx + 1}
                       </span>
                       <span className="font-bold text-sm text-text truncate">{name}</span>
+                      <button
+                        type="button"
+                        disabled={!canEdit || busy}
+                        onClick={() => handleToggleLead(name)}
+                        title="クリックでイベントリーダーを切り替え"
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold border transition-colors flex items-center gap-1 shrink-0 ${
+                          isLead
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100 shadow-2xs'
+                            : 'bg-bg text-text3 border-border hover:text-text2 hover:border-border2'
+                        }`}
+                      >
+                        <ShieldCheck size={11} />
+                        {isLead ? 'イベントリーダー' : '一般'}
+                      </button>
                     </div>
 
                     {canEdit && (

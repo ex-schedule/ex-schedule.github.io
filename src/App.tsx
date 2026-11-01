@@ -78,7 +78,7 @@ function App() {
   const [globalLeadMembers, setGlobalLeadMembers] = useState<string[]>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const cached = localStorage.getItem('ex_portable_cached_lead_members');
+        const cached = localStorage.getItem('ex_portable_cached_lead_members_v2');
         if (cached) {
           const parsed = JSON.parse(cached);
           if (Array.isArray(parsed) && parsed.every(x => typeof x === 'string')) {
@@ -428,7 +428,7 @@ function App() {
         }
         if (Array.isArray(data.leadMembers) && data.leadMembers.every((x: unknown) => typeof x === 'string')) {
           setGlobalLeadMembers(data.leadMembers);
-          try { localStorage.setItem('ex_portable_cached_lead_members', JSON.stringify(data.leadMembers)); } catch (e) {}
+          try { localStorage.setItem('ex_portable_cached_lead_members_v2', JSON.stringify(data.leadMembers)); } catch (e) {}
         }
         if (data.memberStations) {
           setGlobalStations(data.memberStations);
@@ -1810,7 +1810,7 @@ function App() {
           setGlobalLeadMembers(res.leadMembers);
           try {
             localStorage.setItem('ex_portable_cached_members', JSON.stringify(res.members));
-            localStorage.setItem('ex_portable_cached_lead_members', JSON.stringify(res.leadMembers));
+            localStorage.setItem('ex_portable_cached_lead_members_v2', JSON.stringify(res.leadMembers));
           } catch (e) {}
         }}
         onRenameMember={async (oldName, newName, isLead) => {
@@ -1823,7 +1823,7 @@ function App() {
           }
           try {
             localStorage.setItem('ex_portable_cached_members', JSON.stringify(res.members));
-            localStorage.setItem('ex_portable_cached_lead_members', JSON.stringify(res.leadMembers));
+            localStorage.setItem('ex_portable_cached_lead_members_v2', JSON.stringify(res.leadMembers));
           } catch (e) {}
         }}
         onDeleteMember={async (targetName) => {
@@ -1836,7 +1836,7 @@ function App() {
           }
           try {
             localStorage.setItem('ex_portable_cached_members', JSON.stringify(res.members));
-            localStorage.setItem('ex_portable_cached_lead_members', JSON.stringify(res.leadMembers));
+            localStorage.setItem('ex_portable_cached_lead_members_v2', JSON.stringify(res.leadMembers));
           } catch (e) {}
         }}
         onUpdateOrderOrRole={async (nextMembers, nextLeads) => {
@@ -1845,7 +1845,7 @@ function App() {
           setGlobalLeadMembers(res.leadMembers);
           try {
             localStorage.setItem('ex_portable_cached_members', JSON.stringify(res.members));
-            localStorage.setItem('ex_portable_cached_lead_members', JSON.stringify(res.leadMembers));
+            localStorage.setItem('ex_portable_cached_lead_members_v2', JSON.stringify(res.leadMembers));
           } catch (e) {}
         }}
       />

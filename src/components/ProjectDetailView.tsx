@@ -368,16 +368,16 @@ export const ProjectDetailView = ({
             emptyText="メンバーがいません"
           />
 
-          {/* Lead */}
+          {/* Event Leader */}
           <RoleChipSelect
-            label="担当者"
-            roleBadge="担当者"
-            roleDescription="責任者・リーダー"
+            label="イベントリーダー"
+            roleBadge="イベントリーダー"
+            roleDescription="現場リーダー・責任者"
             themeColor="emerald"
-            options={allStaffOptions}
+            options={leadOptions && leadOptions.length > 0 ? leadOptions : allStaffOptions}
             selected={draft.leads || []}
             onToggle={name => canEdit && !saving && patchDraft({ leads: toggleIn(draft.leads, name) })}
-            emptyText="メンバーがいません"
+            emptyText="イベントリーダーが登録されていません"
           />
 
           {/* Member */}

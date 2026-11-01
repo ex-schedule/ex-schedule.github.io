@@ -237,7 +237,7 @@ export const ProjectsListView = ({
                   {p.leads.length > 0 && (
                     <div className="project-text-wrap flex items-start gap-2">
                       <Shield size={14} className="mt-0.5 shrink-0 text-emerald-600" />
-                      <span><span className="font-bold text-emerald-700">担当者</span> {p.leads.map(name => name.replace('　', '')).join('、')}</span>
+                      <span><span className="font-bold text-emerald-700">イベントリーダー</span> {p.leads.map(name => name.replace('　', '')).join('、')}</span>
                     </div>
                   )}
                   {p.members.length > 0 && <div>メンバー {p.members.length}名</div>}
