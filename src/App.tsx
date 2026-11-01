@@ -57,11 +57,8 @@ function App() {
     () => (typeof window !== 'undefined' && (new URLSearchParams(window.location.search).get('tab') === 'projects' || new URLSearchParams(window.location.search).get('project')) ? 'projects' : 'schedule')
   );
   const [overallQuery, setOverallQuery] = useState('');
-  const [isReadOnly] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return new URLSearchParams(window.location.search).get('readonly') === '1';
-  });
-  const canEdit = !isReadOnly;
+  const [isReadOnly] = useState(() => false);
+  const canEdit = true;
 
   const [globalMembers, setGlobalMembers] = useState<string[]>(() => {
     if (typeof window !== 'undefined') {
@@ -1113,17 +1110,10 @@ function App() {
                 <span className="hidden md:inline">メンバー管理</span>
               </button>
             )}
-            {isReadOnly ? (
-              <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-600 rounded-lg border border-slate-200 text-[10px] font-bold">
-                <Eye size={12} />
-                閲覧専用モード
-              </div>
-            ) : (
-              <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-lg border border-emerald-100 text-[10px] font-bold">
-                <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-                パブリック編集モード
-              </div>
-            )}
+            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-lg border border-emerald-100 text-[10px] font-bold">
+              <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+              リアルタイム同期中
+            </div>
           </div>
         </div>
       </header>
