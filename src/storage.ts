@@ -124,7 +124,7 @@ export async function createCryptPadDocumentClient(
     },
   });
 
-  await transport.ensureReady();
+  await transport.ensureReadyOrCached();
 
   async function request(path: string, init: RequestInit = {}): Promise<any> {
     if (path === '/api/session') {
@@ -138,14 +138,14 @@ export async function createCryptPadDocumentClient(
     if (docMatch) {
       const col = decodeURIComponent(docMatch[1]);
       const id = decodeURIComponent(docMatch[2]);
-      await transport.ensureReady();
+      await transport.ensureReadyOrCached();
       return { document: transport.getDocument(col, id) };
     }
 
     const colMatch = path.match(/^\/api\/collections\/([^/]+)$/);
     if (colMatch) {
       const col = decodeURIComponent(colMatch[1]);
-      await transport.ensureReady();
+      await transport.ensureReadyOrCached();
       return { documents: transport.listCollection(col) };
     }
 

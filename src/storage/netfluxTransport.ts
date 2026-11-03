@@ -18,7 +18,48 @@ export type NetfluxTransportOptions = {
 
 const CACHE_KEY_PREFIX = 'ex_schedule_e2ee_ops_v1_';
 
-function loadCachedOps(channelId: string): CommandOperation[] {
+const CACHE_DB_NAME = 'ex_schedule_cache';
+const CACHE_STORE = 'ops';
+
+// 履歴は数MBになり localStorage の上限(iPhoneでは約5MB)を超えるため、IndexedDB に保存する
+function openCacheDb(): Promise<IDBDatabase | null> {
+  return new Promise(resolve => {
+    try {
+      if (typeof indexedDB === 'undefined') return resolve(null);
+      const req = indexedDB.open(CACHE_DB_NAME, 1);
+      req.onupgradeneeded = () => {
+        if (!req.result.objectStoreNames.contains(CACHE_STORE)) req.result.createObjectStore(CACHE_STORE);
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => resolve(null);
+      req.onblocked = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+let cacheDbPromise: Promise<IDBDatabase | null> | null = null;
+function getCacheDb(): Promise<IDBDatabase | null> {
+  if (!cacheDbPromise) cacheDbPromise = openCacheDb();
+  return cacheDbPromise;
+}
+
+async function loadCachedOps(channelId: string): Promise<CommandOperation[]> {
+  const db = await getCacheDb();
+  if (db) {
+    const fromDb = await new Promise<unknown>(resolve => {
+      try {
+        const req = db.transaction(CACHE_STORE, 'readonly').objectStore(CACHE_STORE).get(channelId);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => resolve(null);
+      } catch {
+        resolve(null);
+      }
+    });
+    if (Array.isArray(fromDb) && fromDb.length > 0) return fromDb as CommandOperation[];
+  }
+  // 以前の版が localStorage に残した一時保存を読む
   try {
     if (typeof localStorage === 'undefined') return [];
     const raw = localStorage.getItem(CACHE_KEY_PREFIX + channelId);
@@ -30,7 +71,26 @@ function loadCachedOps(channelId: string): CommandOperation[] {
   }
 }
 
-function saveCachedOps(channelId: string, ops: CommandOperation[]): void {
+async function saveCachedOps(channelId: string, ops: CommandOperation[]): Promise<void> {
+  const db = await getCacheDb();
+  if (db) {
+    const saved = await new Promise<boolean>(resolve => {
+      try {
+        const tx = db.transaction(CACHE_STORE, 'readwrite');
+        tx.objectStore(CACHE_STORE).put(ops, channelId);
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => resolve(false);
+        tx.onabort = () => resolve(false);
+      } catch {
+        resolve(false);
+      }
+    });
+    if (saved) {
+      // IndexedDB に入ったら、上限を圧迫する localStorage 側は消して空ける
+      try { localStorage.removeItem(CACHE_KEY_PREFIX + channelId); } catch {}
+      return;
+    }
+  }
   try {
     if (typeof localStorage === 'undefined') return;
     localStorage.setItem(CACHE_KEY_PREFIX + channelId, JSON.stringify(ops));
@@ -42,7 +102,7 @@ export async function createNetfluxTransport(options: NetfluxTransportOptions) {
   const codec = await createCryptoCodec(credentials);
   const wsFactory = options.webSocketFactory || ((url: string) => new WebSocket(url));
 
-  let operations: CommandOperation[] = loadCachedOps(credentials.channelId);
+  let operations: CommandOperation[] = await loadCachedOps(credentials.channelId);
   let state = replayCommandLog(operations, seedDocuments);
 
   let ws: WebSocket | null = null;
@@ -53,6 +113,8 @@ export async function createNetfluxTransport(options: NetfluxTransportOptions) {
   let hasEverConnected = false;
   let readyPromise: Promise<void> | null = null;
   let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+  let saveTimer: ReturnType<typeof setTimeout> | undefined;
+  let backgroundRetryTimer: ReturnType<typeof setTimeout> | undefined;
 
   let historyBuffer: string[] = [];
   let historyResolvers: Array<(ops: CommandOperation[]) => void> = [];
@@ -61,7 +123,12 @@ export async function createNetfluxTransport(options: NetfluxTransportOptions) {
   function recomputeState(nextOps: CommandOperation[]) {
     operations = nextOps;
     state = replayCommandLog(operations, seedDocuments);
-    saveCachedOps(credentials.channelId, operations);
+    // 履歴の受信中は何度も呼ばれるため、まとめて1回保存する
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      void saveCachedOps(credentials.channelId, operations);
+    }, 500);
+    (saveTimer as any)?.unref?.();
     onInvalidate?.();
   }
 
@@ -244,6 +311,29 @@ export async function createNetfluxTransport(options: NetfluxTransportOptions) {
     await connect();
   }
 
+  function connectInBackground(): void {
+    if (closed || backgroundRetryTimer) return;
+    connect().catch(() => {
+      if (closed) return;
+      backgroundRetryTimer = setTimeout(() => {
+        backgroundRetryTimer = undefined;
+        connectInBackground();
+      }, 5000);
+      (backgroundRetryTimer as any)?.unref?.();
+    });
+  }
+
+  // 読み取り用: 一時保存があれば待たずにそれを返し、最新の履歴は裏で取りに行く。
+  // 書き込み(commitOperation)は従来どおり ensureReady で接続完了を待つ。
+  async function ensureReadyOrCached(): Promise<void> {
+    if (ws && ws.readyState === WebSocket.OPEN && hkId) return;
+    if (operations.length > 0) {
+      connectInBackground();
+      return;
+    }
+    await connect();
+  }
+
   async function syncHistory(): Promise<TransportState> {
     await ensureReady();
     const ops = await requestFullHistoryInternal();
@@ -353,6 +443,9 @@ export async function createNetfluxTransport(options: NetfluxTransportOptions) {
   function close(): void {
     closed = true;
     clearTimeout(reconnectTimer);
+    clearTimeout(backgroundRetryTimer);
+    clearTimeout(saveTimer);
+    void saveCachedOps(credentials.channelId, operations);
     try { ws?.close(); } catch {}
     ws = null;
   }
@@ -360,6 +453,7 @@ export async function createNetfluxTransport(options: NetfluxTransportOptions) {
   return {
     credentials,
     ensureReady,
+    ensureReadyOrCached,
     syncHistory,
     commitOperation,
     getDocument,
