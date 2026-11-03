@@ -114,7 +114,7 @@ export async function createNetfluxTransport(options: NetfluxTransportOptions) {
           try { socket.close(); } catch {}
           reject(new Error('保存サーバーへの接続がタイムアウトしました。'));
         }
-      }, 12000);
+      }, 60000);
       (connectTimeout as any)?.unref?.();
 
       socket.addEventListener('error', () => {
