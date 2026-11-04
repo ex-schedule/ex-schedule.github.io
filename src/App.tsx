@@ -1042,12 +1042,12 @@ function App() {
       {/* Header */}
       <header className="bg-white border-b border-border sticky top-0 z-50 shadow-sm">
         <div className="max-w-[1800px] w-full mx-auto px-2 sm:px-4 h-14 sm:h-16 flex items-center justify-between gap-1 sm:gap-4">
-          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">
             <div className="w-8 h-8 sm:w-10 sm:h-10 shrink-0 bg-accent rounded-xl flex items-center justify-center text-white shadow-lg shadow-accent/20">
               <Calendar size={24} />
             </div>
-            <div>
-              <h1 className="sr-only min-[340px]:not-sr-only text-base sm:text-lg font-bold tracking-tight whitespace-nowrap">EX事業部スケジュール</h1>
+            <div className="min-w-0">
+              <h1 className="hidden min-[340px]:block text-sm sm:text-lg font-bold tracking-tight truncate">EX事業部スケジュール</h1>
               <p className="hidden sm:block text-[10px] text-text2 font-medium uppercase tracking-widest">Schedule Management</p>
             </div>
           </div>
@@ -1104,7 +1104,7 @@ function App() {
                 data-edit-only
                 onClick={() => setIsMemberModalOpen(true)}
                 title="メンバーの追加・編集・削除"
-                className="px-2 sm:px-2.5 py-1.5 text-accent bg-accent/5 hover:bg-accent hover:text-white border border-accent/25 rounded-lg transition-colors flex items-center gap-1 text-[11px] font-bold"
+                className="hidden sm:flex px-2.5 py-1.5 text-accent bg-accent/5 hover:bg-accent hover:text-white border border-accent/25 rounded-lg transition-colors items-center gap-1 text-[11px] font-bold"
               >
                 <Users size={13} />
                 <span className="hidden md:inline">メンバー管理</span>
