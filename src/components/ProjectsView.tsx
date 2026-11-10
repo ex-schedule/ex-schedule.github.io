@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo } from 'react';
+import { useState, useRef, useMemo, useEffect } from 'react';
 import { LEAD_MEMBERS, NON_EVENT_KEYWORDS } from '../constants';
 import type { ProjectItem, ProjectCandidate } from '../types';
 import { genId, todayString, isNonEventVenue, isSameVenue, sameProjectName, detectProjectMetadata, projectCoversDate, projectDates } from '../utils/venue';
@@ -40,6 +40,18 @@ export const ProjectsView = ({
     if (typeof window === 'undefined') return '';
     return window.localStorage.getItem('ex-my-name') || '';
   });
+
+  // 月を切り替えたら、前の月の案件の詳細を開いたままにしない(別の月へ保存しようとして失敗するため)
+  const viewedMonthRef = useRef(`${year}-${month}`);
+  useEffect(() => {
+    const key = `${year}-${month}`;
+    if (viewedMonthRef.current === key) return;
+    viewedMonthRef.current = key;
+    selectedSnapshot.current = null;
+    setSelectedId(null);
+    setNewProjectDraft(null);
+    setListError(null);
+  }, [year, month]);
 
   const handleChangeMyName = (name: string) => {
     setMyName(name);
@@ -248,6 +260,9 @@ export const ProjectsView = ({
 
   const saveDetail = async (saved: ProjectItem, baseline: ProjectItem): Promise<ProjectItem> => {
     if (!canEdit) throw new Error("閲覧専用のため保存できません。");
+    if (saved.dateEnd && saved.date && saved.dateEnd < saved.date) {
+      throw new Error('終了日が開始日より前になっています。日付を確認してください。');
+    }
     const isNew = newProjectDraft?.id === baseline.id;
     const sourceIds = new Set(isNew ? [] : sourceIdsById.get(baseline.id) || [baseline.id]);
     const baselineArray = isNew || sourceIds.size !== 1

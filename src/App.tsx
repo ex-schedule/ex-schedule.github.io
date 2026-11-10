@@ -8,7 +8,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Calendar, ChevronRight, Info, Save, ChevronLeft, ChevronRight as ChevronRightIcon, AlertCircle, X, BarChart3, StickyNote, ArrowLeftToLine, CalendarDays, ClipboardList, History, Search, Eye, LayoutGrid, RefreshCw, Users } from 'lucide-react';
 import { TRAINING_LABELS, TRAINING_LOCATIONS, MEMBERS, LEAD_MEMBERS, StatusType, TYPE_LABEL, TYPE_CLASS, GoalRow, INITIAL_SCHEDULE_DATA, getDaysInMonth, getStartOffset } from './constants';
-import { db } from './storage';
+import { db, getConnectionStatus, subscribeConnectionStatus } from './storage';
 import { doc, collection, onSnapshot, setDoc, updateDoc, runTransaction, FieldPath, serverTimestamp, getDocFromServer } from './storage';
 import type { ScheduleItem, MonthData, StorageErrorInfo, PendingRequestItem, HistoryEntry } from './types';
 import { cleanFirestorePayload, getDow, getType, clientColor, clientShortName, eventClientFor, buildProjectCandidates, normalizeVenue } from './utils/venue';
@@ -91,6 +91,11 @@ function App() {
   });
 
   const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState(getConnectionStatus);
+  useEffect(() => {
+    setConnectionStatus(getConnectionStatus());
+    return subscribeConnectionStatus(setConnectionStatus);
+  }, []);
   const [currentSchedMember, setCurrentSchedMember] = useState(() => globalMembers[0] || MEMBERS[0]);
 
   useEffect(() => {
@@ -1110,9 +1115,21 @@ function App() {
                 <span className="hidden md:inline">メンバー管理</span>
               </button>
             )}
-            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-lg border border-emerald-100 text-[10px] font-bold">
-              <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-              リアルタイム同期中
+            <div
+              data-connection-status={connectionStatus}
+              title={connectionStatus === 'online' ? '最新の内容を表示しています' : '保存サーバーにつながるまで、前回読み込んだ内容を表示しています。つながるまで保存はできません。'}
+              className={`flex items-center gap-1.5 px-1.5 sm:px-3 py-1.5 rounded-lg border text-[10px] font-bold whitespace-nowrap ${
+                connectionStatus === 'online'
+                  ? 'hidden sm:flex bg-emerald-50 text-emerald-600 border-emerald-100'
+                  : connectionStatus === 'connecting'
+                  ? 'bg-amber-50 text-amber-700 border-amber-200'
+                  : 'bg-red-50 text-red-600 border-red-200'
+              }`}
+            >
+              <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${
+                connectionStatus === 'online' ? 'bg-emerald-500' : connectionStatus === 'connecting' ? 'bg-amber-500' : 'bg-red-500'
+              }`} />
+              {connectionStatus === 'online' ? 'リアルタイム同期中' : connectionStatus === 'connecting' ? '接続中…' : '未接続'}
             </div>
           </div>
         </div>

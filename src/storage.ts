@@ -15,6 +15,26 @@ import {
   formatShareHash,
 } from './storage/cryptoCodec';
 import { createNetfluxTransport } from './storage/netfluxTransport';
+import type { ConnectionStatus } from './storage/netfluxTransport';
+
+export type { ConnectionStatus };
+
+// 保存サーバーとの接続状態(画面の表示用)。ローカルサーバー利用時は常に online。
+let connectionStatus: ConnectionStatus = 'online';
+const statusListeners = new Set<(status: ConnectionStatus) => void>();
+function publishStatus(next: ConnectionStatus) {
+  connectionStatus = next;
+  for (const listener of statusListeners) listener(next);
+}
+export function getConnectionStatus(): ConnectionStatus {
+  return connectionStatus;
+}
+export function subscribeConnectionStatus(listener: (status: ConnectionStatus) => void): () => void {
+  statusListeners.add(listener);
+  return () => {
+    statusListeners.delete(listener);
+  };
+}
 
 export type { ChannelCredentials };
 export { generateNewChannelCredentials, parseShareHash, formatShareHash };
@@ -112,13 +132,22 @@ export function getActiveShareLinks(baseUrl?: string): { editUrl: string; viewUr
 
 export async function createCryptPadDocumentClient(
   credentials: ChannelCredentials,
-  options: { seedDocuments?: StoredDocument[]; webSocketFactory?: (url: string) => WebSocket } = {}
+  options: {
+    seedDocuments?: StoredDocument[];
+    webSocketFactory?: (url: string) => WebSocket;
+    checkpointInterval?: number;
+    checkpointDelayMs?: number;
+    onStatus?: (status: ConnectionStatus) => void;
+  } = {}
 ): Promise<DocumentClient> {
   const listeners = new Set<Listener>();
   const transport = await createNetfluxTransport({
     credentials,
     seedDocuments: options.seedDocuments,
     webSocketFactory: options.webSocketFactory,
+    checkpointInterval: options.checkpointInterval,
+    checkpointDelayMs: options.checkpointDelayMs,
+    onStatus: options.onStatus,
     onInvalidate() {
       for (const listener of listeners) listener.refresh();
     },
@@ -134,11 +163,20 @@ export async function createCryptPadDocumentClient(
       };
     }
 
-    const docMatch = path.match(/^\/api\/documents\/([^/]+)\/([^/]+)$/);
+    const docMatch = path.match(/^\/api\/documents\/([^/]+)\/([^/?]+)(\?fresh=1)?$/);
     if (docMatch) {
       const col = decodeURIComponent(docMatch[1]);
       const id = decodeURIComponent(docMatch[2]);
-      await transport.ensureReadyOrCached();
+      if (docMatch[3]) {
+        // 書き込み前の読み取り: 一時保存の古い内容を元に保存しないよう、最新になるのを待つ
+        try {
+          await transport.ensureReadyForWrite();
+        } catch (err: any) {
+          throw new StorageError('unavailable', err?.message || '保存サーバーに接続できません。');
+        }
+      } else {
+        await transport.ensureReadyOrCached();
+      }
       return { document: transport.getDocument(col, id) };
     }
 
@@ -313,9 +351,10 @@ export function serverTimestamp() {
   return { __serverTimestamp: true };
 }
 
-export async function getDocFromServer(ref: DocumentReference) {
+export async function getDocFromServer(ref: DocumentReference, options: { fresh?: boolean } = {}) {
   const result = await ref.db.request(
-    '/api/documents/' + encodeURIComponent(ref.collection) + '/' + encodeURIComponent(ref.id)
+    '/api/documents/' + encodeURIComponent(ref.collection) + '/' + encodeURIComponent(ref.id) +
+      (options.fresh ? '?fresh=1' : '')
   );
   return new DocumentSnapshot(result.document, ref);
 }
@@ -374,7 +413,7 @@ export async function runTransaction<T>(
       async get(ref) {
         const identity = ref.collection + '/' + ref.id;
         if (snapshots.has(identity)) return snapshots.get(identity)!;
-        const snapshot = await getDocFromServer(ref);
+        const snapshot = await getDocFromServer(ref, { fresh: true });
         snapshots.set(identity, snapshot);
         reads.set(identity, { collection: ref.collection, id: ref.id, version: snapshot.version });
         return snapshot;
@@ -489,7 +528,8 @@ export async function initializeSession() {
     try {
       localStorage.setItem(ACTIVE_HASH_STORAGE_KEY, canonicalHash);
     } catch {}
-    activeCryptPadClient = await createCryptPadDocumentClient(creds);
+    publishStatus('connecting');
+    activeCryptPadClient = await createCryptPadDocumentClient(creds, { onStatus: publishStatus });
     if (creds.readOnly) url.searchParams.set('readonly', '1');
     else url.searchParams.delete('readonly');
     window.history.replaceState(null, '', url.pathname + url.search + canonicalHash);
@@ -524,7 +564,8 @@ export async function initializeSession() {
     try {
       localStorage.setItem(ACTIVE_HASH_STORAGE_KEY, canonicalHash);
     } catch {}
-    activeCryptPadClient = await createCryptPadDocumentClient(fallbackCreds);
+    publishStatus('connecting');
+    activeCryptPadClient = await createCryptPadDocumentClient(fallbackCreds, { onStatus: publishStatus });
     window.history.replaceState(null, '', url.pathname + url.search + canonicalHash);
   }
 }

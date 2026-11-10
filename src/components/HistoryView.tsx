@@ -1,4 +1,8 @@
 import type { HistoryEntry } from '../types';
+import { TYPE_LABEL } from '../constants';
+
+// 承認・却下の履歴は内部の種別名(pending など)で保存されているため、表示名に直す
+const label = (h: HistoryEntry, value: string) => (h.field === 'type' && TYPE_LABEL[value]) || value;
 
 
 // --- 変更履歴 ---
@@ -45,9 +49,9 @@ export const HistoryView = ({
               <span className="font-bold text-text min-w-[90px]">{h.member.replace('　', '')}</span>
               <span className="font-mono font-bold text-accent min-w-[40px]">{h.day}日</span>
               <span className="text-text2">{h.field === 'type' ? 'ステータス' : h.field === 'client' ? 'クライアント' : '詳細'}</span>
-              <span className="text-text3 line-through">{h.from || '（空）'}</span>
+              <span className="text-text3 line-through">{label(h, h.from) || '（空）'}</span>
               <span className="text-text2">→</span>
-              <span className="font-bold text-text">{h.to || '（空）'}</span>
+              <span className="font-bold text-text">{label(h, h.to) || '（空）'}</span>
             </div>
           ))}
         </div>

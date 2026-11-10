@@ -26,7 +26,13 @@ export type CommandOperation = {
   reads: ReadPrecondition[];
   expectedRequest?: RequestPrecondition;
   writes: WriteOperation[];
+  /** 旧形式のチェックポイント(版の一致を条件に全データを置き換える)。新しい版は書かない */
   snapshot?: StoredDocument[];
+  /**
+   * チェックポイント: basis の操作を適用し終えた時点の全データの写し。
+   * 履歴を最初から持っている端末には何もしない操作で、途中から読む端末が出発点に使う。
+   */
+  checkpoint?: { basis: string | null; docs?: StoredDocument[] };
 };
 
 export type OperationOutcome = {

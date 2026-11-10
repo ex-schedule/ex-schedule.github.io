@@ -46,6 +46,10 @@ export async function saveScheduleClient(
         (!sameProjectValue(current.client || '', expected.client || '') && current.client !== nextClient)) {
       throw new Error('予定が他の人に更新されました。最新の内容を確認して再度入力してください。');
     }
+    // イベントリーダーはメンバー管理で変更できるため、保存済みの設定を優先する
+    const settingsSnap = await tx.get(doc(db, 'settings', 'global'));
+    const settingsData = settingsSnap.exists() ? settingsSnap.data() : {};
+    const leadList: string[] = Array.isArray(settingsData.leadMembers) ? settingsData.leadMembers : LEAD_MEMBERS;
     let projects = [...(data.projects || [])];
     const isProject = !isNonEventVenue(current.detail);
     const venue = detectProjectMetadata(current.detail).cleanVenue || current.detail;
@@ -68,17 +72,14 @@ export async function saveScheduleClient(
         dateEnd: nextClient ? [match.dateEnd || match.date, date].sort().at(-1) : match.dateEnd,
         occurrenceDates: nextClient ? [...new Set([...projectDates(match), date])].sort() : match.occurrenceDates,
         headcount: Math.max(match.headcount || 0, staff.length),
-        leads: [...new Set([...match.leads, ...staff.filter(name => LEAD_MEMBERS.includes(name))])],
-        members: [...new Set([...match.members, ...staff.filter(name => !LEAD_MEMBERS.includes(name))])],
+        leads: [...new Set([...match.leads, ...staff.filter(name => leadList.includes(name))])],
+        members: [...new Set([...match.members, ...staff.filter(name => !leadList.includes(name))])],
         updatedAt: at,
       };
     } else if (nextClient && isProject) {
       const meta = detectProjectMetadata(current.detail);
       let dayTime = data.dailyTimes?.[dayIdx + 1];
-      if (dayTime === undefined) {
-        const settings = await tx.get(doc(db, 'settings', 'global'));
-        dayTime = settings.exists() ? settings.data().dailyTimes?.[dayIdx + 1] : undefined;
-      }
+      if (dayTime === undefined) dayTime = settingsData.dailyTimes?.[dayIdx + 1];
       const time = parseTimeRange(dayTime || current.detail);
       const staff = Object.entries(data.schedule || {})
         .filter(([, items]) => items?.[dayIdx]?.type === 'event' && isSameVenue(items[dayIdx].detail, current.detail))
@@ -87,8 +88,8 @@ export async function saveScheduleClient(
         id: newId, date, dateEnd: date, occurrenceDates: [date], timeStart: time.start, timeEnd: time.end,
         client: nextClient, carrier: meta.carrier || '', venue: meta.cleanVenue || current.detail,
         content: meta.content || '', headcount: staff.length || 1, directors: [],
-        leads: staff.filter(name => LEAD_MEMBERS.includes(name)),
-        members: staff.filter(name => !LEAD_MEMBERS.includes(name)), comment: '', layout: [], updatedAt: at,
+        leads: staff.filter(name => leadList.includes(name)),
+        members: staff.filter(name => !leadList.includes(name)), comment: '', layout: [], updatedAt: at,
       });
     }
     schedule[dayIdx] = { ...current, client: nextClient };

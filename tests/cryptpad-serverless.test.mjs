@@ -16,6 +16,13 @@ class MockNetfluxHub {
   constructor() {
     this.channels = new Map(); // channelId -> { validateKey, history: string[], peers: Set<MockSocket> }
     this.nextId = 1;
+    this.requests = []; // GET_HISTORY の記録
+    this.sockets = new Set();
+    this.pongs = [];
+  }
+
+  dropAll() {
+    for (const socket of [...this.sockets]) socket.close();
   }
 
   createWebSocketClass() {
@@ -28,6 +35,7 @@ class MockNetfluxHub {
         this.id = `peer-${hub.nextId++}`;
         this.hkId = 'history-keeper-mock';
         this.listeners = { open: [], message: [], close: [], error: [] };
+        hub.sockets.add(this);
         queueMicrotask(() => {
           this._emit('open', {});
           this._emit('message', { data: JSON.stringify([0, '', 'IDENT', this.id]) });
@@ -45,6 +53,10 @@ class MockNetfluxHub {
       send(raw) {
         const msg = JSON.parse(raw);
         const [seq, cmd, target, arg] = msg;
+        if (msg[2] === 'PONG') {
+          hub.pongs.push(msg);
+          return;
+        }
         if (cmd === 'JOIN') {
           const chId = target;
           if (!hub.channels.has(chId)) {
@@ -66,19 +78,32 @@ class MockNetfluxHub {
           }
           const ch = hub.channels.get(chId);
           if (reqType === 'GET_HISTORY') {
-            if (req[2]?.metadata?.validateKey && !ch.validateKey) {
-              ch.validateKey = req[2].metadata.validateKey;
+            const config = req[2] || {};
+            if (config.metadata?.validateKey && !ch.validateKey) {
+              ch.validateKey = config.metadata.validateKey;
             }
             queueMicrotask(() => {
-              this._emit('message', {
-                data: JSON.stringify([
-                  0,
-                  this.hkId,
-                  'MSG',
-                  this.id,
-                  JSON.stringify(['STATE', chId, 1, ch.validateKey ? { validateKey: ch.validateKey } : {}]),
-                ]),
+              const direct = payload => this._emit('message', {
+                data: JSON.stringify([0, this.hkId, 'MSG', this.id, JSON.stringify(payload)]),
               });
+              direct({ validateKey: ch.validateKey, channel: chId });
+              let start = 0;
+              if (config.lastKnownHash) {
+                start = ch.history.findIndex(entry => entry.slice(0, 64) === config.lastKnownHash);
+                if (start < 0) {
+                  hub.requests.push({ peer: this.id, lastKnownHash: config.lastKnownHash, served: -1 });
+                  direct({ error: 'EUNKNOWN', channel: chId, txid: config.txid });
+                  return;
+                }
+              } else {
+                // 実サーバーと同じく、チェックポイントが2つ以上あれば最後から2つ目以降だけを返す
+                const checkpoints = ch.history.map((entry, i) => (entry.startsWith('cp|') ? i : -1)).filter(i => i >= 0);
+                if (checkpoints.length >= 2) start = checkpoints.at(-2);
+              }
+              const served = ch.history.slice(start);
+              hub.requests.push({ peer: this.id, lastKnownHash: config.lastKnownHash || null, served: served.length, total: ch.history.length });
+              for (const entry of served) direct([config.txid, 'someone', 'MSG', chId, entry]);
+              direct({ state: 1, channel: chId, txid: config.txid });
             });
           } else if (reqType === 'GET_FULL_HISTORY') {
             queueMicrotask(() => {
@@ -121,7 +146,9 @@ class MockNetfluxHub {
       }
 
       close() {
+        if (this.readyState === 3) return;
         this.readyState = 3;
+        hub.sockets.delete(this);
         for (const ch of hub.channels.values()) {
           ch.peers.delete(this);
         }
@@ -403,6 +430,109 @@ test('memberStore adds, renames (migrating schedules/projects/stations), reorder
       client.close();
     }
   } finally {
+    globalThis.WebSocket = prevWS;
+  }
+});
+
+async function waitFor(check, timeoutMs = 4000) {
+  const end = Date.now() + timeoutMs;
+  while (Date.now() < end) {
+    if (await check()) return true;
+    await new Promise(resolve => setTimeout(resolve, 20));
+  }
+  return false;
+}
+
+test('checkpoints let a new device load a short window, reconnects fetch only the difference, and PING is answered', async () => {
+  const hub = new MockNetfluxHub();
+  const prevWS = globalThis.WebSocket;
+  globalThis.WebSocket = hub.createWebSocketClass();
+  const clients = [];
+  try {
+    const creds = await codec.generateNewChannelCredentials('wss://mock.cryptpad/cryptpad_websocket');
+    const hash = codec.formatShareHash(creds, 'edit');
+    const open = async () => {
+      const client = await api.createCryptPadDocumentClient(await codec.parseShareHash(hash), { checkpointInterval: 4, checkpointDelayMs: 0 });
+      clients.push(client);
+      return client;
+    };
+    const month = client => api.doc(client, 'months', '2026-11');
+    const read = async client => (await api.getDocFromServer(month(client))).data();
+    const increment = client => api.runTransaction(client, async tx => {
+      const snap = await tx.get(month(client));
+      tx.update(month(client), 'counter', snap.data().counter + 1);
+    });
+
+    const a = await open();
+    await api.setDoc(month(a), { schedule: { A: [{ type: 'rest', detail: '' }] }, counter: 0 });
+    for (let i = 1; i <= 11; i++) await increment(a);
+    const channel = hub.channels.get(creds.channelId);
+    assert.ok(await waitFor(() => channel.history.filter(entry => entry.startsWith('cp|')).length >= 3), 'checkpoints are written');
+    const totalBefore = channel.history.length;
+
+    // 新しい端末: 最後から2つ目のチェックポイント以降だけを受け取り、同じ内容になる
+    const b = await open();
+    const bRequest = hub.requests.at(-1);
+    assert.equal(bRequest.lastKnownHash, null);
+    assert.ok(bRequest.served < totalBefore, `served ${bRequest.served} of ${totalBefore}`);
+    assert.equal((await read(b)).counter, 11);
+    assert.equal((await api.getDocFromServer(month(b))).version, (await api.getDocFromServer(month(a))).version);
+
+    // 途中から読んだ端末でも、版の一致を条件にした保存と相互の即時反映が働く
+    await increment(b);
+    assert.ok(await waitFor(async () => (await read(a)).counter === 12), 'A sees B');
+
+    // 切断 → 再接続では、手元の最後の位置からの差分だけを読む
+    hub.dropAll();
+    assert.ok(await waitFor(() => hub.requests.filter(r => r.lastKnownHash).length >= 2, 6000), 'both reconnect incrementally');
+    const delta = hub.requests.filter(r => r.lastKnownHash).at(-1);
+    assert.ok(delta.served <= 2, `delta served ${delta.served}`);
+    await increment(a);
+    assert.ok(await waitFor(async () => (await read(b)).counter === 13), 'B sees A after reconnect');
+
+    // サーバーからの PING に PONG を返す(返さないと実サーバーは約75秒で切断する)
+    for (const socket of hub.sockets) socket._emit('message', { data: JSON.stringify([0, '', 'PING', 12345]) });
+    assert.ok(await waitFor(() => hub.pongs.some(msg => msg[3] === 12345)), 'PONG is sent');
+
+    // 3台目も短い範囲から同じ結果になる
+    const c = await open();
+    assert.equal((await read(c)).counter, 13);
+  } finally {
+    for (const client of clients) client.close?.();
+    globalThis.WebSocket = prevWS;
+  }
+});
+
+test('a device still loads when no checkpoint in the served window can be used, by reading the full history', async () => {
+  const hub = new MockNetfluxHub();
+  const prevWS = globalThis.WebSocket;
+  globalThis.WebSocket = hub.createWebSocketClass();
+  const clients = [];
+  try {
+    const creds = await codec.generateNewChannelCredentials('wss://mock.cryptpad/cryptpad_websocket');
+    const hash = codec.formatShareHash(creds, 'edit');
+    const a = await api.createCryptPadDocumentClient(await codec.parseShareHash(hash), { checkpointInterval: 1000 });
+    clients.push(a);
+    const ref = api.doc(a, 'months', '2026-11');
+    await api.setDoc(ref, { counter: 1 });
+    await api.setDoc(ref, { counter: 2 }, { merge: true });
+    // 基準の操作が範囲の外にあるチェックポイントを2つ、手で差し込む
+    const channel = hub.channels.get(creds.channelId);
+    const cryptoCodec = await codec.createCryptoCodec(await codec.parseShareHash(hash));
+    for (const id of ['x1', 'x2']) {
+      const env = await cryptoCodec.encryptAndSign({
+        opId: 'cp-' + id, timestamp: new Date().toISOString(), reads: [], writes: [],
+        checkpoint: { basis: 'not-in-window', docs: [{ collection: 'months', id: '2026-11', data: { counter: 999 }, version: 9 }] },
+      });
+      channel.history.push(`cp|${id}|${env}`);
+    }
+    const b = await api.createCryptPadDocumentClient(await codec.parseShareHash(hash), { checkpointInterval: 1000 });
+    clients.push(b);
+    const snap = await api.getDocFromServer(api.doc(b, 'months', '2026-11'));
+    assert.equal(snap.data().counter, 2);
+    assert.equal(snap.version, 2);
+  } finally {
+    for (const client of clients) client.close?.();
     globalThis.WebSocket = prevWS;
   }
 });
