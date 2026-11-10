@@ -251,6 +251,14 @@ export async function renameTeamMember(
           changed = true;
         }
 
+        if (nextDoc.recentHistory && typeof nextDoc.recentHistory === 'object' &&
+            Object.values(nextDoc.recentHistory).some((h: any) => h?.member === oldName)) {
+          nextDoc.recentHistory = Object.fromEntries(
+            Object.entries(nextDoc.recentHistory).map(([k, h]: [string, any]) => [k, h?.member === oldName ? { ...h, member: newName } : h])
+          );
+          changed = true;
+        }
+
         if (Array.isArray(nextDoc.projects) && nextDoc.projects.length > 0) {
           const replaceInList = (arr?: string[]) =>
             Array.isArray(arr) ? arr.map(x => (x === oldName ? newName : x)) : [];

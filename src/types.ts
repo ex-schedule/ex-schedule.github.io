@@ -26,6 +26,8 @@ export interface MonthData {
   dailyLocations?: Record<number, string>;
   dailyTimes?: Record<number, string>;
   history?: HistoryEntry[];
+  /** 予定の編集ごとに1件ずつ追記する変更履歴(キーは追記時に作るID)。表示時に history と合わせる */
+  recentHistory?: Record<string, HistoryEntry>;
   projects?: ProjectItem[];
   /** Previously saved clients, retained for suggestions across months. */
   clientNames?: string[];

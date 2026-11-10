@@ -73,7 +73,9 @@ test('the existing schedule saver persists pending request metadata and leaves o
   assert.ok(saved.schedule.A[0].requestId);
   assert.equal(saved.schedule.B[0].type, 'rest');
   assert.equal(saved.overallMemo, 'keep');
-  assert.equal(saved.history.length, 1);
+  assert.equal(saved.history.length, 0);
+  assert.equal(Object.keys(saved.recentHistory).length, 1); // 履歴は1件だけ追記される
+  assert.equal(saved.schedule.A.length, 31);
   assert.ok(Number.isFinite(Date.parse(saved.updatedAt)));
 });
 

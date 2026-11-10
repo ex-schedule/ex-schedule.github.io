@@ -27,6 +27,7 @@ import { collectClientNames } from './utils/projectChanges';
 import { saveProjectChanges, saveScheduleClient } from './utils/projectStore';
 import { saveScheduleField, saveScheduleMapField } from './utils/scheduleStore';
 import { readScheduleMonth } from './utils/navigation';
+import { mergedHistory } from './utils/history';
 import { SummaryView } from './components/SummaryView';
 export { normalizeVenueKey, isSameVenue, detectProjectMetadata, splitVenuesFromText, formatProjectDateRange, projectTitle, buildProjectCandidates } from './utils/venue';
 
@@ -783,9 +784,13 @@ function App() {
     if (!window.confirm('変更履歴を全て消去しますか？')) return;
     setAllData(prev => ({
       ...prev,
-      [monthKey]: { ...(prev[monthKey] || {} as MonthData), history: [] }
+      [monthKey]: { ...(prev[monthKey] || {} as MonthData), history: [], recentHistory: {} }
     }));
-    saveData({ history: [] });
+    // 追記分(recentHistory)は項目ごと置き換えて空にする(合成保存では空にならないため)
+    setIsSaving(true);
+    updateDoc(doc(db, 'months', monthKey), 'history', [], 'recentHistory', {}, 'updatedAt', serverTimestamp())
+      .catch(e => handleStorageError(e, OperationType.WRITE, `months/${monthKey}`))
+      .finally(() => setIsSaving(false));
   };
 
   const projectCandidates = useMemo(
@@ -1709,7 +1714,7 @@ function App() {
               exit={{ opacity: 0, y: -10 }}
             >
               <HistoryView
-                history={currentMonthData.history || []}
+                history={mergedHistory(currentMonthData)}
                 onClear={handleClearHistory}
               />
             </motion.div>

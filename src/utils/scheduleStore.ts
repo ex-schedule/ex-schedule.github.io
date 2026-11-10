@@ -1,10 +1,9 @@
-import { doc, runTransaction, serverTimestamp } from '../storage';
+import { doc, runTransaction, serverTimestamp, FieldPath } from '../storage';
 import { db } from '../storage';
 import { TYPE_LABEL, getDaysInMonth, type StatusType } from '../constants';
 import type { HistoryEntry, MonthData, ScheduleItem } from '../types';
 import { cleanFirestorePayload, getType } from './venue';
-
-const MAX_HISTORY = 300;
+import { RECENT_HISTORY_LIMIT, historyEntryKey, mergedHistory } from './history';
 
 const CONFLICT_MESSAGE = '予定が他の人に更新されました。最新の内容を確認して再度入力してください。';
 const REQUEST_CONFLICT_MESSAGE = '申請内容が更新されました。最新の状態を確認して再度お試しください。';
@@ -82,7 +81,6 @@ export async function saveScheduleField(
     }
     schedule[dayIdx] = nextItem;
 
-    const history = Array.isArray(data.history) ? data.history.slice() : [];
     const entry: HistoryEntry = {
       at: new Date().toISOString(),
       by: '',
@@ -92,11 +90,30 @@ export async function saveScheduleField(
       from,
       to,
     };
-    const nextHistory = [entry, ...history].slice(0, MAX_HISTORY);
+    const entryKey = historyEntryKey();
+    const stored = Array.isArray(raw) ? raw[dayIdx] : undefined;
+    const canPatchCell = snap.exists() && Array.isArray(raw) && raw.length === daysInMonth &&
+      !!stored && typeof stored === 'object' && 'type' in stored;
 
+    if (canPatchCell) {
+      // 変えた1日分と履歴1件だけを送る(その人の1か月分と履歴300件を毎回送り直さない)
+      const fields: unknown[] = [new FieldPath('schedule', member, String(dayIdx)), cleanFirestorePayload(nextItem)];
+      if (Object.keys(data.recentHistory || {}).length >= RECENT_HISTORY_LIMIT) {
+        // 追記分が溜まったら、従来の履歴配列へまとめて移す
+        fields.push('history', cleanFirestorePayload(mergedHistory({ ...data, recentHistory: { ...data.recentHistory, [entryKey]: entry } })));
+        fields.push('recentHistory', {});
+      } else {
+        fields.push(new FieldPath('recentHistory', entryKey), entry);
+      }
+      fields.push('updatedAt', serverTimestamp());
+      tx.update(ref, ...fields);
+      return;
+    }
+
+    // 月のデータがまだ無い・旧形式の並びの時は、その人の1か月分を正しい形で書く
     tx.set(ref, cleanFirestorePayload({
       schedule: { [member]: schedule },
-      history: nextHistory,
+      recentHistory: { [entryKey]: entry },
       updatedAt: serverTimestamp(),
     }), { merge: true });
   });

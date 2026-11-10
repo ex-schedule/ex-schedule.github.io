@@ -653,8 +653,9 @@ export async function createNetfluxTransport(options: NetfluxTransportOptions) {
     return sinceCheckpoint >= checkpointInterval;
   }
 
+  let checkpointInFlight = false;
   function scheduleCheckpoint() {
-    if (checkpointTimer || !shouldCheckpoint()) return;
+    if (checkpointTimer || checkpointInFlight || !shouldCheckpoint()) return;
     // 複数の端末が同時に書かないよう、少し待ってから条件を確かめ直す
     const delay = options.checkpointDelayMs ?? 1500 + Math.random() * 3500;
     checkpointTimer = setTimeout(() => {
@@ -682,12 +683,20 @@ export async function createNetfluxTransport(options: NetfluxTransportOptions) {
       const message = `cp|${Date.now().toString(36)}${random}|${await codec.encryptAndSign(op)}`;
       if (ws !== socket || !synced) return;
       const sendSeq = seq++;
+      // 応答が来るまで次のチェックポイントを書かない(応答が来ない時は時間で解除)
+      checkpointInFlight = true;
+      const release = setTimeout(() => { checkpointInFlight = false; }, ACK_TIMEOUT_MS);
+      (release as any)?.unref?.();
       ackHandlers.set(sendSeq, () => {
+        clearTimeout(release);
+        checkpointInFlight = false;
         if (appendOperation(op, message)) recompute();
         scheduleCheckpoint();
       });
       socket.send(JSON.stringify([sendSeq, 'MSG', credentials.channelId, message]));
-    } catch {}
+    } catch {
+      checkpointInFlight = false;
+    }
   }
 
   function getDocument(collection: string, id: string): StoredDocument | null {
